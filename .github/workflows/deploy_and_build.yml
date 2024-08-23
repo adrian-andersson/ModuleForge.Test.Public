@@ -66,6 +66,12 @@ jobs:
         if: success()
         env:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
+          GH_USERNAME: ${{ secrets.GH_USERNAME }}
+          GH_EMAIL: ${{ secrets.GH_EMAIL }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
+          git config --global user.email $env:GH_EMAIL
+          git config --global user.name $env:GH_USERNAME
           git tag "v$($env:NEXT_VERSION)"
-          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/adrian-andersson/ModuleForge.Test.Public.git "v$($env:NEXT_VERSION)"
+          git push https://$env:GH_USERNAME:$env:GH_PAT@github.com/adrian-andersson/ModuleForge.Test.Public.git "v$($env:NEXT_VERSION)"
+          Write-Verbose "Pushed tag v$($env:NEXT_VERSION)"
