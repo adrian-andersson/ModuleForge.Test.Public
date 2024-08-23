@@ -59,10 +59,13 @@ jobs:
           $nextVersion = get-mfNextSemver -version $latest -increment Patch
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
           build-mfProject -version $nextVersion -InformationAction Continue
+          Write-Output "::set-output name=next_version::$nextVersion"
 
       - name: Tag and push new version
         shell: pwsh
         if: success()
+        env:
+          NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
         run: |
-          git tag "v$($nextVersion.ToString())"
-          git push origin "v$($nextVersion.ToString())"
+          git tag "v$($env:NEXT_VERSION)"
+          git push origin "v$($env:NEXT_VERSION)"
