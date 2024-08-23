@@ -23,6 +23,7 @@ jobs:
 
       - name: Run Pester tests
         shell: pwsh
+        id: pester_tests
         run: |
           $pesterConfigHash = @{
               Run = @{
@@ -43,6 +44,7 @@ jobs:
       - name: Get next version and build
         shell: pwsh
         id: generate_tag
+        if: success()
         run: |
           $VerbosePreference = 'Continue'
           $versionTags = git tag --list
@@ -57,3 +59,10 @@ jobs:
           $nextVersion = get-mfNextSemver -version $latest -increment Patch
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
           build-mfProject -version $nextVersion -InformationAction Continue
+
+      - name: Tag and push new version
+        shell: pwsh
+        if: success()
+        run: |
+          git tag "v$($nextVersion.ToString())"
+          git push origin "v$($nextVersion.ToString())"
