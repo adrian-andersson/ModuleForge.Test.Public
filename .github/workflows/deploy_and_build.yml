@@ -1,0 +1,60 @@
+name: Deploy PS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    if: "contains(github.event.head_commit.message, 'deploy ps')"
+      steps:
+        - name: Checkout repository
+          uses: actions/checkout@v2
+
+        - name: Install dependencies
+          shell: pwsh
+          run: |
+            Install-Module -Name Pester -Force -SkipPublisherCheck
+            Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck
+            Install-Module -Name ModuleForge -AllowPrerelease -Force -SkipPublisherCheck
+
+        - name: Run Pester tests
+          shell: pwsh
+          run: |
+            $pesterConfigHash = @{
+                Run = @{
+                    Passthru = $true
+                    Path = $(join-path -path (join-path -path . -childpath 'source') -childpath 'functions')
+                }
+                CodeCoverage = @{
+                    Enabled = $true
+                    Path = $(join-path -path (join-path -path . -childpath 'source') -childpath 'functions')
+                }
+                Output = @{
+                    Verbosity = 'Detailed'
+                }
+            }
+            $pesterConfig = New-PesterConfiguration -hashtable $pesterConfigHash
+            Invoke-Pester -Configuration $pesterConfig
+
+        - name: Get next version and build
+      shell: pwsh
+      id: generate_tag
+      run: |
+        $VerbosePreference = 'Continue'
+        $versionTags = git tag --list
+        if ($versionTags) {
+          Write-Verbose 'Version Tags Found'
+          $versions = $versionTags.ForEach{[version]::new(($_).Replace('v',''))}
+          $latest = ($versions | Sort-Object -Descending | Select-Object -First 1)
+        } else {
+          Write-Verbose 'Generating new version from scratch at 1'
+          $latest = [version]::new(1,0,0)
+        }
+
+        $nextVersion = get-mfNextSemver -version $latest -increment Patch
+        write-verbose "NEXT VERSION SHOULD BE: $nextVersion"
+ 
+        build-mfProject -version $nextVersion -InformationAction Continue

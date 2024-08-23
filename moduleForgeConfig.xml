@@ -1,0 +1,40 @@
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <Obj RefId="0">
+    <TN RefId="0">
+      <T>System.Management.Automation.PSCustomObject</T>
+      <T>System.Object</T>
+    </TN>
+    <MS>
+      <S N="moduleName">AstroCmdlets</S>
+      <S N="description">A test module</S>
+      <Version N="minimumPsVersion">7.2.0</Version>
+      <Obj N="moduleAuthors" RefId="1">
+        <TN RefId="1">
+          <T>System.String[]</T>
+          <T>System.Array</T>
+          <T>System.Object</T>
+        </TN>
+        <LST>
+          <S>Adrian.Andersson</S>
+        </LST>
+      </Obj>
+      <S N="companyName"></S>
+      <Obj N="tags" RefId="2">
+        <TNRef RefId="1" />
+        <LST>
+          <S>Test</S>
+          <S>ModuleForge</S>
+        </LST>
+      </Obj>
+      <S N="projectUri">https://github.com/adrian-andersson/ModuleForge.Test</S>
+      <S N="licenseUri">https://github.com/adrian-andersson/ModuleForge.Test\LICENSE</S>
+      <S N="guid">34e3ccf2-bd9a-410f-b8c0-b4bddd1ae06f</S>
+      <S N="moduleforgeVersion">0.0.47</S>
+      <S N="iconUri"></S>
+      <Nil N="requiredModules" />
+      <Nil N="ExternalModuleDependencies" />
+      <Nil N="DefaultCommandPrefix" />
+      <Nil N="PrivateData" />
+    </MS>
+  </Obj>
+</Objs>
