@@ -68,4 +68,4 @@ jobs:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
         run: |
           git tag "v$($env:NEXT_VERSION)"
-          git push origin "v$($env:NEXT_VERSION)"
+          git push https://x-access-token:${{ secrets.GH_PAT }}@github.com/adrian-andersson/ModuleForge.Test.Public.git "v$($env:NEXT_VERSION)"
