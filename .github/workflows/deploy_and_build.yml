@@ -69,14 +69,17 @@ jobs:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
           GH_USERNAME: ${{ secrets.GH_USERNAME }}
           GH_EMAIL: ${{ secrets.GH_EMAIL }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
         run: |
           Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
+          write-verbose "GH_Token: $($env:GITHUB_TOKEN)"
           git config --global user.email $env:GH_EMAIL
           git config --global user.name $env:GH_USERNAME
           git tag "v$($env:NEXT_VERSION)"
+          write-verbose 'Local tag done, push to remote'
           if ($?) {
             Write-Verbose "Tag v$($env:NEXT_VERSION) created successfully"
-            git push --tags https://$env:GITHUB_TOKEN@github.com/adrian-andersson/ModuleForge.Test.Public.git
+            git push --tags https://$($env:GITHUB_TOKEN)@github.com/adrian-andersson/ModuleForge.Test.Public
             if ($?) {
               Write-Verbose "Tag v$($env:NEXT_VERSION) pushed successfully"
             } else {
