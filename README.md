@@ -4,7 +4,9 @@ Test module for ModuleForge
 ## What is this?
 
 This is a test module to see how ModuleForge works with Github Actions and using Github Packages.
-Still need to add more detail to this readme. Lets get workflows working first
+Still need to add more detail to this readme. Lets get workflows working first.
+
+I cannot believe I got most of the workflow done, except for the tagging...
 
 ## Still to do
 
