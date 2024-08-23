@@ -7,5 +7,6 @@ This is a test module to see how ModuleForge works with Github Actions and using
 
 ## Still to do
 
-- [ ] Get workflow working
+- [X] Get workflow working
+- [ ] Workflow is working, but need to test tags
 - better version of this workflow
