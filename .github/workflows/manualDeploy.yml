@@ -12,6 +12,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           token: ${{ secrets.GH_PAT }}
+          fetch-depth: 0 #Ensure we are getting all the tag history
         
 
       - name: Install dependencies
