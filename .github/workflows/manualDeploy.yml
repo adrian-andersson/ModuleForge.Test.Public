@@ -1,0 +1,77 @@
+name: Manual D
+
+name: Manual Workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          Install-Module -Name Pester -Force -SkipPublisherCheck
+          Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck
+          Install-Module -Name ModuleForge -AllowPrerelease -Force -SkipPublisherCheck
+
+      - name: Run Pester tests
+        shell: pwsh
+        id: pester_tests
+        run: |
+          $pesterConfigHash = @{
+              Run = @{
+                  Passthru = $true
+                  Path = $(join-path -path (join-path -path . -childpath 'source') -childpath 'functions')
+              }
+              CodeCoverage = @{
+                  Enabled = $true
+                  Path = $(join-path -path (join-path -path . -childpath 'source') -childpath 'functions')
+              }
+              Output = @{
+                  Verbosity = 'Detailed'
+              }
+          }
+          $pesterConfig = New-PesterConfiguration -hashtable $pesterConfigHash
+          Invoke-Pester -Configuration $pesterConfig
+
+      - name: Get next version and build
+        shell: pwsh
+        id: generate_tag
+        if: success()
+        run: |
+          $VerbosePreference = 'Continue'
+          $versionTags = git tag --list
+          if ($versionTags) {
+            Write-Verbose 'Version Tags Found'
+            $versions = $versionTags.ForEach{[version]::new(($_).Replace('v',''))}
+            $latest = ($versions | Sort-Object -Descending | Select-Object -First 1)
+          } else {
+            Write-Verbose 'Generating new version from scratch at 1'
+            $latest = [version]::new(1,0,0)
+          }
+          $nextVersion = get-mfNextSemver -version $latest -increment Patch
+          Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
+          build-mfProject -version $nextVersion -InformationAction Continue
+          Write-Output "::set-output name=next_version::$nextVersion"
+
+      - name: Create new tag
+        shell: pwsh
+        if: success()
+        env:
+          NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
+          GH_USERNAME: ${{ secrets.GH_USERNAME }}
+          GH_EMAIL: ${{ secrets.GH_EMAIL }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
+          write-verbose "GH_PAT: $($env:GH_PAT)"
+          git config --global user.email $env:GH_EMAIL
+          git config --global user.name $env:GH_USERNAME
+          git tag "v$($env:NEXT_VERSION)"
+          
