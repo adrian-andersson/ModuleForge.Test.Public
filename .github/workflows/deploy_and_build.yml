@@ -61,7 +61,7 @@ jobs:
           build-mfProject -version $nextVersion -InformationAction Continue
           Write-Output "::set-output name=next_version::$nextVersion"
 
- - name: Create new tag
+      - name: Create new tag
         shell: pwsh
         if: success()
         env:
