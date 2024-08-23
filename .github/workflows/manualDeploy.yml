@@ -67,19 +67,24 @@ jobs:
           GH_EMAIL: ${{ secrets.GH_EMAIL }}
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          write-verbose 'Pre VerbosePreference'
           $verbosePreference = 'Continue'
           write-verbose 'Post VerbosePreference'
-          #Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
+          Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
           #write-verbose "GH_PAT: $($env:GH_PAT)"
           $pat = $env:GH_PAT
+          $ver = "v$($env:NEXT_VERSION)"
+          
           if($pat)
           {
             write-verbose "PAT Length: $($pat.Length)"
+            $uri = "https://$($pat)@github.com/adrian-andersson/ModuleForge.Test.Public.git"
+            git config --global user.email $($env:GH_EMAIL)
+            git config --global user.name $($env:GH_USERNAME)
+            write-verbose "Tagging Version as: $ver"
+            git tag "$ver"
+            git push --tags $uri 
           }else{
             write-verbose 'No PAT?'
           }
-          git config --global user.email $env:GH_EMAIL
-          git config --global user.name $env:GH_USERNAME
-          git tag "v$($env:NEXT_VERSION)"
+          
           
