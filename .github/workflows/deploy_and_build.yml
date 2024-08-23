@@ -4,11 +4,12 @@ on:
   push:
     branches:
       - main
+    workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: "contains(github.event.head_commit.message, 'deploy ps')"
+    if: "contains(github.event.head_commit.message, 'deploy ps') || github.event_name == 'workflow_dispatch'"
 
     steps:
       - name: Checkout repository
@@ -68,6 +69,7 @@ jobs:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
           GH_USERNAME: ${{ secrets.GH_USERNAME }}
           GH_EMAIL: ${{ secrets.GH_EMAIL }}
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
           git config --global user.email $env:GH_EMAIL
@@ -75,6 +77,12 @@ jobs:
           git tag "v$($env:NEXT_VERSION)"
           if ($?) {
             Write-Verbose "Tag v$($env:NEXT_VERSION) created successfully"
+            git push --tags https://$env:GH_PAT@github.com/adrian-andersson/ModuleForge.Test.Public.git
+            if ($?) {
+              Write-Verbose "Tag v$($env:NEXT_VERSION) pushed successfully"
+            } else {
+              Write-Error "Failed to push tag v$($env:NEXT_VERSION)"
+            }
           } else {
             Write-Error "Failed to create tag v$($env:NEXT_VERSION)"
           }
