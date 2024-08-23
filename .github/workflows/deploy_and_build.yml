@@ -69,7 +69,6 @@ jobs:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
           GH_USERNAME: ${{ secrets.GH_USERNAME }}
           GH_EMAIL: ${{ secrets.GH_EMAIL }}
-          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
           Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
           git config --global user.email $env:GH_EMAIL
@@ -77,7 +76,7 @@ jobs:
           git tag "v$($env:NEXT_VERSION)"
           if ($?) {
             Write-Verbose "Tag v$($env:NEXT_VERSION) created successfully"
-            git push --tags https://$env:GH_PAT@github.com/adrian-andersson/ModuleForge.Test.Public.git
+            git push --tags https://$env:GITHUB_TOKEN@github.com/adrian-andersson/ModuleForge.Test.Public.git
             if ($?) {
               Write-Verbose "Tag v$($env:NEXT_VERSION) pushed successfully"
             } else {
