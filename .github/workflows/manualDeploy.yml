@@ -47,8 +47,10 @@ jobs:
         if: success()
         run: |
           $VerbosePreference = 'Continue'
+          write-verbose 'Getting Tags'
           $versionTags = git tag --list
-          if ($versionTags) {
+          write-verbose "Got VersionTags: $versionTags"
+          if($versionTags) {
             Write-Verbose 'Version Tags Found'
             $versions = $versionTags.ForEach{[version]::new(($_).Replace('v',''))}
             $latest = ($versions | Sort-Object -Descending | Select-Object -First 1)
