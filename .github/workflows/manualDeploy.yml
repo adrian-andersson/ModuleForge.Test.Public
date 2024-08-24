@@ -155,6 +155,7 @@ jobs:
           REPO_URI: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          $verbosePreference = 'Continue'
           $ver = "v$($env:NEXT_VERSION)"
           $currentPath = get-location
           $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
@@ -172,9 +173,10 @@ jobs:
         if: success()
         env:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
-          REPO_URI: ${{ github.repository }}
+          REPO_URI: ${{ github.repository_owner }}
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
+          $verbosePreference = 'Continue'
           $ver = "v$($env:NEXT_VERSION)"
           $repoUri = "https://nuget.pkg.github.com/$($env:REPO_URI)/index.json"
           $currentPath = get-location
