@@ -89,7 +89,7 @@ jobs:
           {
             new-item -itemType Directory -path $repositoryPath
           }
-          register-mfLocalResourceRepository -path $repositoryPath
+          register-mfLocalPsResourceRepository -path $repositoryPath
           publish-psresource -repository LocalTestRepository -path $psd1Ref
 
           $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
