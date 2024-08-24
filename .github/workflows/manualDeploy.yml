@@ -128,7 +128,7 @@ jobs:
         shell: pwsh
         if: success()
         env:
-          GH_PAT: ${{ secrets.GH_PAT }}
+          GH_TOKEN: ${{ github.token }}
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
         run: |
           $verbosePreference = 'Continue'
@@ -153,6 +153,7 @@ jobs:
         env:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
           REPO_URI: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ver = "v$($env:NEXT_VERSION)"
           $currentPath = get-location
