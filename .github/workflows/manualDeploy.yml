@@ -64,6 +64,45 @@ jobs:
           build-mfProject -version $nextVersion -InformationAction Continue
           Write-Output "::set-output name=next_version::$nextVersion"
 
+      - name: Publish to Local
+        shell: pwsh
+        id: publish_local
+        if: success()
+        env:
+          REPO_URI: ${{ github.repository }}
+        run: |
+          $verbosePreference = 'continue'
+          write-verbose "Repository URI: $($env:REPO_URI)"
+          $currentPath = get-location
+          #Find the item from the build
+          $psd1Ref = $(get-childItem -path ./build/ -recurse -filter '*.psd1').fullname
+          if($psd1Ref)
+          {
+            write-verbose "Found PSD1 file: $psd1Ref"
+          }else{
+            throw 'No PSD1 file found'
+          }
+
+          $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
+          write-verbose "Will create local repository at path: $repositoryPath"
+          if(!(test-path $repositoryPath))
+          {
+            new-item -itemType Directory -path $repositoryPath
+          }
+          register-mfLocalResourceRepository -path $repositoryPath
+          publish-psresource -repository LocalTestRepository -path $psd1Ref
+
+          $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
+          if($nuRef)
+          {
+            write-verbose "Found NUPKG: $nuRef"
+          }else{
+            throw 'No NUPKG found'
+          }
+          add-mfRepositoryXmlData -repositoryUri $($env:REPO_URI)  -nugetPackagePath $nuRef
+
+
+
       - name: Create new tag
         shell: pwsh
         if: success()
@@ -83,5 +122,63 @@ jobs:
           }else{
             write-verbose 'No ver?'
           }
-          
-          
+
+      - name: Create GitHub Release
+        shell: pwsh
+        if: success()
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
+        run: |
+          $ver = "v$($env:NEXT_VERSION)"
+          $releaseName = "Release $($ver)"
+          $releaseBody = "This is the release for version $ver"
+
+          $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
+          $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
+          if($nuRef)
+          {
+            write-verbose "Found NUPKG: $nuRef"
+          }else{
+            throw 'No NUPKG found'
+          }
+
+          gh release create $ver --title $releaseName --notes $releaseBody
+
+      - name: Upload Nupkg to Release
+        shell: pwsh
+        if: success()
+        env:
+          NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
+          REPO_URI: ${{ github.repository }}
+        run: |
+          $ver = "v$($env:NEXT_VERSION)"
+          $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
+          $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
+          if($nuRef)
+          {
+            write-verbose "Found NUPKG: $nuRef"
+          }else{
+            throw 'No NUPKG found'
+          }
+          gh release upload $ver $nuRef
+
+      - name: Publish to GitHub Packages
+        shell: pwsh
+        if: success()
+        env:
+          NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
+          REPO_URI: ${{ github.repository }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          $ver = "v$($env:NEXT_VERSION)"
+          $repoUri = "https://nuget.pkg.github.com/$($env:REPO_URI)/index.json"
+          $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
+          $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
+          if($nuRef)
+          {
+            write-verbose "Found NUPKG: $nuRef"
+          }else{
+            throw 'No NUPKG found'
+          }
+          dotnet nuget push $nuRef -k $env:GH_PAT -s $repoUri
