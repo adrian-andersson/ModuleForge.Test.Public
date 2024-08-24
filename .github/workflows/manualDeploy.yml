@@ -72,7 +72,8 @@ jobs:
           REPO_URI: ${{ github.repository }}
         run: |
           $verbosePreference = 'continue'
-          write-verbose "Repository URI: $($env:REPO_URI)"
+          $repositoryUri = "https://github.com/$($env:REPO_URI)"
+          write-verbose "Repository URI: $repositoryUri"
           $currentPath = get-location
           #Find the item from the build
           $psd1Ref = $(get-childItem -path ./build/ -recurse -filter '*.psd1').fullname
@@ -99,7 +100,7 @@ jobs:
           }else{
             throw 'No NUPKG found'
           }
-          add-mfRepositoryXmlData -repositoryUri $($env:REPO_URI)  -nugetPackagePath $nuRef
+          add-mfRepositoryXmlData -repositoryUri $repositoryUri  -nugetPackagePath $nuRef
 
 
 
@@ -130,10 +131,11 @@ jobs:
           GH_PAT: ${{ secrets.GH_PAT }}
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
         run: |
+          $verbosePreference = 'Continue'
           $ver = "v$($env:NEXT_VERSION)"
           $releaseName = "Release $($ver)"
           $releaseBody = "This is the release for version $ver"
-
+          $currentPath = get-location
           $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
           $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
           if($nuRef)
@@ -153,6 +155,7 @@ jobs:
           REPO_URI: ${{ github.repository }}
         run: |
           $ver = "v$($env:NEXT_VERSION)"
+          $currentPath = get-location
           $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
           $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
           if($nuRef)
@@ -173,6 +176,7 @@ jobs:
         run: |
           $ver = "v$($env:NEXT_VERSION)"
           $repoUri = "https://nuget.pkg.github.com/$($env:REPO_URI)/index.json"
+          $currentPath = get-location
           $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
           $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
           if($nuRef)
