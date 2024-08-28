@@ -21,6 +21,11 @@ jobs:
           Install-Module -Name Pester -Force -SkipPublisherCheck
           Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck
           Install-Module -Name ModuleForge -AllowPrerelease -Force -SkipPublisherCheck
+          $moduleList = @('Pester','Microsoft.PowerShell.PSResourceGet','ModuleForge')
+          import-module $moduleList
+          get-module $moduleList|Select-object Name,@{name='version';expression{"$($_.Version)-$($_.PrivateData.PSData.Prerelease)"}}|Format-Table
+
+
 
       - name: Run Pester tests
         shell: pwsh
