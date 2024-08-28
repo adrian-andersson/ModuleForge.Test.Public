@@ -58,11 +58,11 @@ jobs:
           write-verbose "Got VersionTags: $versionTags"
           if($versionTags) {
             Write-Verbose 'Version Tags Found'
-            $versions = $versionTags.ForEach{[version]::new(($_).Replace('v',''))}
+            $versions = $versionTags.ForEach{[semver]::new(($_).Replace('v',''))}
             $latest = ($versions | Sort-Object -Descending | Select-Object -First 1)
           } else {
             Write-Verbose 'Generating new version from scratch at 1'
-            $latest = [version]::new(1,0,0)
+            $latest = [semver]::new(1,0,0)
           }
           $nextVersion = get-mfNextSemver -version $latest -stableRelease
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
