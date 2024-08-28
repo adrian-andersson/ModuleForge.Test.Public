@@ -23,7 +23,7 @@ jobs:
           Install-Module -Name ModuleForge -AllowPrerelease -Force -SkipPublisherCheck
           $moduleList = @('Pester','Microsoft.PowerShell.PSResourceGet','ModuleForge')
           import-module $moduleList
-          get-module $moduleList|Select-object Name,@{name='version';expression{"$($_.Version)-$($_.PrivateData.PSData.Prerelease)"}}|Format-Table
+          get-module $moduleList|Select-object Name,@{name='version';expression={"$($_.Version)-$($_.PrivateData.PSData.Prerelease)"}}|Format-Table
 
 
 
