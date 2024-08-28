@@ -1,4 +1,4 @@
-name: Manual Workflow
+name: Manual Revision
 
 on:
   workflow_dispatch:

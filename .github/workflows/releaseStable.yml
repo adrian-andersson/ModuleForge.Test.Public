@@ -1,14 +1,11 @@
-name: Deploy PS
+name: Release Stable
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: "contains(github.event.head_commit.message, 'deploy ps')"
 
     steps:
       - name: Checkout repository
@@ -67,7 +64,7 @@ jobs:
             Write-Verbose 'Generating new version from scratch at 1'
             $latest = [version]::new(1,0,0)
           }
-          $nextVersion = get-mfNextSemver -version $latest -prerelease
+          $nextVersion = get-mfNextSemver -version $latest -stableRelease
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
           build-mfProject -version $nextVersion -InformationAction Continue
           Write-Output "::set-output name=next_version::$nextVersion"
