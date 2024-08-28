@@ -61,7 +61,7 @@ jobs:
           write-verbose "Got VersionTags: $versionTags"
           if($versionTags) {
             Write-Verbose 'Version Tags Found'
-            $versions = $versionTags.ForEach{[semver]::new(($_).Replace('v',''))}
+            $versions = $versionTags.ForEach{[semver]::new($_.TrimStart("v"))}
             $latest = ($versions | Sort-Object -Descending | Select-Object -First 1)
           } else {
             Write-Verbose 'Generating new version from scratch at 1'
