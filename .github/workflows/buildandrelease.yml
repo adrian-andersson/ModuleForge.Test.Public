@@ -102,7 +102,8 @@ jobs:
           $nextVersion = get-mfNextSemver @nextVerSplat
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
           build-mfProject -version $nextVersion -InformationAction Continue
-          echo "next_version=$nextVersion" >> $GITHUB_ENV
+          write-verbose "Push $nextVersion to workflow as EnvVar"
+          echo "next_version=$nextVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Publish to Local #Push the build from last step to a temporary file-based repository on the build machine. Add Repository to XML for GHPackages Compatibility
         shell: pwsh
@@ -153,7 +154,7 @@ jobs:
           Write-Verbose "Creating tag v$($env:NEXT_VERSION)"
           $ver = "v$($env:NEXT_VERSION)"
           
-          if($ver)
+          if($ver -and $ver -ne 'v' -and $ver.length -ge 6)
           {
             write-verbose "Tagging Version as: $ver"
             git tag "$ver"
