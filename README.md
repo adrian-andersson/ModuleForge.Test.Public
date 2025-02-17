@@ -34,7 +34,7 @@ Please feel free to copy/replicate whatever you like from this module, it exists
 
 Here is a Mermaid chart to try and show the process
 
-```Mermaid
+```mermaid
 flowchart TD 
 A[Main Branch] -->|On Push| B[Invoke Pester Tests]
 B -->|On Success| C[Manually Run Build and Release workflow]
