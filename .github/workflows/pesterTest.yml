@@ -1,4 +1,4 @@
-name: Build and Release
+name: Run Pester Test on Main Commit
 
 on:
   push:
