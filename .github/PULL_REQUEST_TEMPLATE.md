@@ -21,7 +21,7 @@
 ### Major Release Bump
 
 - [ ] Breaking Changed to function Output
-- [ ] Change Optional Paramater to Mandatory
+- [ ] Change Optional Parameter to Mandatory
 - [ ] Change to Parameter Name without Backwards Compatible Alias Support
 - [ ] Rewrite or Refactor
 - [ ] Other breaking change
@@ -39,7 +39,7 @@
 
 - [ ] Bug Fix(es)
 - [ ] Changes to Verbose, Error, Debug, Information, Warning streams
-- [ ] Code Optimisations that do not change Function output or nput
+- [ ] Code Optimisations that do not change Function output or input
 - [ ] Code stye update
 - [ ] Other Patch change
 - [ ] Additional / Changes to Pester Tests
