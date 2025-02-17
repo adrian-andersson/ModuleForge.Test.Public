@@ -23,7 +23,7 @@ on:
           - prerelease
 
 jobs:
-  build:
+  buildAndRelease:
     runs-on: ubuntu-latest
 
     steps:
