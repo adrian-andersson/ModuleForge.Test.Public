@@ -1,22 +1,174 @@
-# ModuleForge.Test
-Test module for ModuleForge
+# ModuleForge.Test.Public
 
 ## What is this?
 
-This is a test module to see how ModuleForge works with Github Actions and using Github Packages.
-Still need to add more detail to this readme. Lets get workflows working first.
+This is an example PowerShell module that is built with [ModuleForge](https://github.com/adrian-andersson/ModuleForge). It is a bit of a fun module used to show how to structure your files, pester tests, and use github actions and ModuleForge to "compile" a module into a PSD1, create a tag and release for the version, and upload the nupkg to Github Packages.
 
-I cannot believe I got most of the workflow done, except for the tagging...
-And then I stuffed up the YAML spacing... le sad
-And I'm still _le sad_
-And even more _le sad_
-And guess what... still _le sad_
+It includes:
 
-## Still to do
+- Two Class Files
+  - AlienVisitor
+  - GalacticAmbassador
+- One Enum File
+  - SpaceSuitType
+- One Private Function
+  - Get-AlienVisitorWelcome
+- Four Functions/Exported Commands
+  - Get-GalacticAmbassador
+  - Get-GalacticReception
+  - New-AlienVisitor
+  - Start-Blastoff
+- Three Pester Tests
+  - Get-GalacticReception.Tests
+  - New-AlienVisitor.Tests
+  - Start-Plastoff.Tests
+- Two GH Actions Workflows
+  - A workflow to invoke-pester on a push to 'main' branch automatically
+  - A Build and Release workflow that can be run manually, with dropdown options for what version actions to take
 
-- [X] Get workflow working
-- [X] Fix the version passing between steps
-- [X] Add PAT to repository, and add to workflow
-- [X] Add Username and Email to repository secrets, and add those to the workflow as well
-- [ ] Workflow is working, but need to test tags
-- better version of this workflow
+Please feel free to copy/replicate whatever you like from this module, it exists as an example of how to use the ModuleForge PowerShell Module to help you build and deploy your own PowerShell modules and set up CI/CD pipelines.
+
+> You may find a few existing releases and package versions for this module. There should be no difference between versions, they exist only to test the workflow versioning works as expected.
+
+## How does the Workflow operate?
+
+Here is a Mermaid chart to try and show the process
+
+```Mermaid
+flowchart TD 
+A[Main Branch] -->|On Push| B[Invoke Pester Tests]
+B -->|On Success| C[Manually Run Build and Release workflow]
+C -->|Set PreRelease and Version Details| D[Build New Module]
+D --> E[Create Version Tag]
+E --> F[Create Release]
+F --> G[Publish Version to Github Packages]
+```
+
+## I want to try this module
+
+If you want to, sure thing. The easiest way will be:
+
+1. Go to the 'Releases' section of this repository
+2. Download the latest 'nupkg' file
+3. Rename the nupkg so it has a .zip extension
+4. Place it in your Module folder
+5. Use PowerShell `get-help` to discover how to use this module
+
+## How do I use your demo module
+
+Here's a quick demonstration of the module in action:
+
+```PowerShell
+import-module astrocmdlets
+
+get-module astrocmdlets
+
+<#
+Name              : astrocmdlets
+Path              : C:\Users\ANDERSSONA\OneDrive -
+                    Ventia\Documents\PowerShell\Modules\astrocmdlets\2.0.0\AstroCmdlets.psm1
+Description       : A test module
+ModuleType        : Script
+Version           : 2.0.0
+PreRelease        :
+NestedModules     : {}
+ExportedFunctions : {Get-GalacticAmbassador, Get-GalacticReception, New-AlienVisitor, Start-Blastoff}
+ExportedCmdlets   :
+ExportedVariables :
+ExportedAliases   : blastOff
+#>
+
+get-command -Module astrocmdlets
+
+<#
+Name        : Get-GalacticAmbassador
+CommandType : Function
+Definition  :
+                  param (
+                      [string]$Name = "Zarnak",
+                      [string]$HomePlanet = "Nebula-7",
+                      [string]$FavoriteFood = "Quantum Quinoa",
+                      [string]$Title = "Celestial Diplomat"
+                  )
+
+                  $ambassador = [GalacticAmbassador]::new($Name, $HomePlanet, $FavoriteFood, $Title)
+                  $ambassador.GetIntroduction()
+
+
+Name        : Get-GalacticReception
+CommandType : Function
+Definition  :
+                  param (
+                      [AlienVisitor]$Visitor = $null
+                  )
+
+                  if (-not $Visitor) {
+                      # Summon a default alien visitor
+                      $Visitor = New-AlienVisitor -Name "Zog" -HomePlanet "Xenon-9" -FavoriteFood "Quantum Quinoa"
+                  }
+
+                  # Welcome the visitor
+                  Get-AlienVisitorWelcome -Visitor $Visitor
+
+
+Name        : New-AlienVisitor
+CommandType : Function
+Definition  :
+                  param (
+                      [string]$Name,
+                      [string]$HomePlanet,
+                      [ValidateAlienFoodAttribute()]
+                      [string]$FavoriteFood
+                  )
+
+                  $alien = [AlienVisitor]::new($Name, $HomePlanet, $FavoriteFood)
+                  return $alien
+
+
+Name        : Start-Blastoff
+CommandType : Function
+Definition  :
+                  param (
+                      [string]$RocketName,
+                      [SpaceSuitType]$AstronautSuit
+                  )
+
+                  "Countdown initiated for rocket '$RocketName'..."
+                  "Astronauts are suiting up in their $AstronautSuit spacesuits."
+                  #Start-Sleep -Seconds 3
+                  3..1 | ForEach-Object {
+                      "T-minus $_ seconds..."
+                      Start-Sleep -milliseconds 200
+                  }
+                  "🚀 Launch successful! '$RocketName' has reached orbit!"
+
+#>
+
+Get-GalacticAmbassador
+<#
+Greetings, Earthlings! I am Zarnak from planet Nebula-7. My favorite food here is Quantum Quinoa.
+ I am the Galactic Ambassador, holding the esteemed title of Celestial Diplomat.
+#>
+
+Get-GalacticReception
+
+<# 
+Greetings, Earthlings! I am Zog from planet Xenon-9. My favorite food here is Quantum Quinoa.
+#>
+
+New-AlienVisitor -Name Frank -FavoriteFood 'Quantum Quinoa' -HomePlanet 'Hxzor-4'
+
+<#
+Name  HomePlanet FavoriteFood
+----  ---------- ------------
+Frank Hxzor-4    Quantum Quinoa
+#>
+
+Start-Blastoff -RocketName 'The PizzaTray'
+<#
+T-minus 3 seconds...
+T-minus 2 seconds...
+T-minus 1 seconds...
+🚀 Launch successful! 'The PizzaTray' has reached orbit!
+#>
+```
