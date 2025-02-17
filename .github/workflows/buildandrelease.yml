@@ -103,7 +103,7 @@ jobs:
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
           build-mfProject -version $nextVersion -InformationAction Continue
           write-verbose "Push $nextVersion to workflow as EnvVar"
-          echo "next_version=$nextVersion" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          write-output "next_version=$nextVersion" >> $env:GITHUB_OUTPUT
 
       - name: Publish to Local #Push the build from last step to a temporary file-based repository on the build machine. Add Repository to XML for GHPackages Compatibility
         shell: pwsh
