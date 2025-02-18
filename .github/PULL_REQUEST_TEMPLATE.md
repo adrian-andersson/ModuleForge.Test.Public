@@ -14,13 +14,22 @@
 - [ ] Reviewed Type of Change (below)
 - [ ] Used appropriate Git Commit prefixes
 
+## What's Next
+
+<!-- Select below to illustrate next actions and intent -->
+
+- [ ] PreRelease Only
+- [ ] Create a new PreRelease, test, then create new Stable release
+- [ ] Create new Stable Release
+- [ ] No new Release at this time
+
 ## Type of Change
 
 <!--  Please select the most appropriate change options. Use this as a guide on how to bump the next release version using the highest option available -->
 
 ### Major Release Bump
 
-- [ ] Breaking Changed to function Output
+- [ ] Breaking Change to function Output
 - [ ] Change Optional Parameter to Mandatory
 - [ ] Change to Parameter Name without Backwards Compatible Alias Support
 - [ ] Rewrite or Refactor
