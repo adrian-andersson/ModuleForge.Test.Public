@@ -5,7 +5,7 @@ function New-AlienVisitor {
         [ValidateAlienFoodAttribute()]
         [string]$FavoriteFood
     )
-
+    #Use the AlienVisitor class that we created in .classes
     $alien = [AlienVisitor]::new($Name, $HomePlanet, $FavoriteFood)
     return $alien
 }
