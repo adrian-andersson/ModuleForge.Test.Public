@@ -21,47 +21,110 @@ on:
         options:
           - stable
           - prerelease
+      moduleforge_release_toggle:
+        description: 'Select ModuleForge Release Type'
+        required: false
+        default: 'stable'
+        type: choice
+        options:
+          - moduleforge-latest-stable-only
+          - moduleforge-latest-prerelease-allowed
+
 
 jobs:
   buildAndRelease:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write #required for pushing tags and creating releases
+      packages: write #Needed for publishing to Github packages
+      actions: read #Grant read access to actions and logs
 
     steps:
+
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GH_PAT }}
           fetch-depth: 0 #Ensure we are getting all the tag history
+
+      - name: Git Check
+        shell: pwsh
+        run: | 
+          $VerbosePreference = 'Continue'
+          $gitVer = git --version
+          $gitFolder = git rev-parse --is-inside-work-tree
+          write-verbose "GitVersion: $gitVer"
+          write-verbose "IsGitWorkingDirectory: $gitFolder"
+
+      - name: Check Pester Test Workflow status
+        shell: pwsh
+        env:
+          REPO_URI: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: | 
+          $VerbosePreference = 'Continue'
+          $workflow = 'pesterTest.yml'
+          $Owner = "$env:GITHUB_REPOSITORY_OWNER"
+          $Repo = "$env:GITHUB_REPOSITORY"
+          write-verbose "Owner: $owner"
+          write-verbose "Repo: $repo"
+          $repositoryUri = "https://github.com/$($env:REPO_URI)"
+          $apiUri = "https://api.github.com/repos/$Repo/actions/workflows/$Workflow/runs?per_page=2&status=completed"
+          write-verbose "apiUri: $apiUri"
+          $token = "${{ secrets.GITHUB_TOKEN }}"
+          $headers = @{
+            Authorization = "token $token"
+            Accept = 'application/vnd.github.v3+json'
+          }
+          $WorkflowRuns = Invoke-RestMethod -Uri $apiUri -Headers $Headers -ve
+          $LatestRun = $WorkflowRuns.workflow_runs | Select-Object -First 1
+          if(!$latestRun){throw "❌ No $($workflow) workflows found"}
+          write-verbose "LatestPesterRun Status: $($LatestRun.conclusion) LatestRun SHA: $($LatestRun.head_sha)"
+          if($latestRun.conclusion -ne 'success'){
+            throw "❌ The most recent Pester Test failed. Fix the issues before proceeding."
+          }
+          $LatestTestSHA = $LatestRun.head_sha
+          $gitLog = git log --pretty=format:"%H - %s" -n 2
+          #write-verbose "Git Log:`n$($gitLog|out-string)"
+          $split = $gitLog[0].split(' - ')
+          $lastSha = $split[0]
+          $message = $split[1]
+          write-verbose "Last Commit SHA: $lastSha"
+          if($lastSha -eq $LatestTestSHA)
+          {
+            write-host '✅ Pester Test validation passed! Matched last commit'
+          }elseIf($message -like 'Merge pull request*'){
+            write-verbose 'Last commit was a merge. Checking previous commit'
+            $split2 = $gitLog[1].split(' - ')
+            $prSha = $split2[0]
+            $prMessage = $split2[1]
+            write-verbose "Last PR SHA: $prSha"
+            if($prSha -eq $LatestTestSHA)
+            {
+              write-host '✅ Pester Test validation passed! Matched PR Test Commit'
+            }else{
+              throw "❌ The most recent Pester Test failed. Fix the issues before proceeding."
+            }
+          }else{
+            throw "❌ No match on PR or primary commit with last Pester Test. Please check pester and try again!"
+          }
 
       - name: Install dependencies #Install the modules we need for the build
         shell: pwsh
         run: |
-          Install-Module -Name Pester -Force -SkipPublisherCheck
-          Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck 
-          Install-Module -Name ModuleForge -AllowPrerelease -Force -SkipPublisherCheck
-          $moduleList = @('Pester','Microsoft.PowerShell.PSResourceGet','ModuleForge')
+          $VerbosePreference = 'Continue'
+          Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck
+          $mfReleaseType="${{ github.event.inputs.moduleforge_release_toggle }}"
+          if($mfReleaseType -eq 'moduleforge-latest-prerelease-allowed')
+          {
+            write-verbose '********WARNING: Will use latest moduleForge, even if it is a prerelease ********'
+            Install-Module -Name ModuleForge -AllowPrerelease -Force -SkipPublisherCheck
+          }else{
+            write-verbose 'Will use latest stable release of moduleForge'
+            Install-Module -Name ModuleForge -Force -SkipPublisherCheck
+          }
+          $moduleList = @('Microsoft.PowerShell.PSResourceGet','ModuleForge')
           import-module $moduleList
           get-module $moduleList|Select-object Name,@{name='version';expression={if($_.PrivateData.PSData.Prerelease){"$($_.Version)-$($_.PrivateData.PSData.Prerelease)"}else{"$($_.Version)"}}}|Format-Table
-
-      - name: Run Pester tests #Unit and Integration Testing
-        shell: pwsh
-        id: pester_tests
-        run: |
-          $pesterConfigHash = @{
-              Run = @{
-                  Passthru = $true
-                  Path = $(join-path -path (join-path -path . -childpath 'source') -childpath 'functions')
-              }
-              CodeCoverage = @{
-                  Enabled = $true
-                  Path = $(join-path -path (join-path -path . -childpath 'source') -childpath 'functions')
-              }
-              Output = @{
-                  Verbosity = 'Detailed'
-              }
-          }
-          $pesterConfig = New-PesterConfiguration -hashtable $pesterConfigHash
-          Invoke-Pester -Configuration $pesterConfig
 
       - name: Get next version and build #Execute the moduleForge command to create new module files
         shell: pwsh
@@ -69,16 +132,8 @@ jobs:
         if: success()
         run: |
           $VerbosePreference = 'Continue'
-          $versionTags = git tag --list
-          write-verbose "Got VersionTags: $versionTags"
-          if($versionTags) {
-            $versions = $versionTags.ForEach{[semver]::new($_.TrimStart("v"))}
-            $latest = ($versions | Sort-Object -Descending | Select-Object -First 1)
-            Write-Verbose "Latest Tag Version: $($latest.tostring())"
-          } else {
-            Write-Verbose 'Generating new version from scratch at 1'
-            $latest = [semver]::new(1,0,0)
-          }
+          $latest = get-mfGitLatestVersion
+          #Inputs to determine next semver
           $versionType="${{ github.event.inputs.version_type }}"
           write-verbose "Version Increment Type: $versionType"
           $releaseType="${{ github.event.inputs.release_type }}"
@@ -101,9 +156,16 @@ jobs:
           }
           $nextVersion = get-mfNextSemver @nextVerSplat
           Write-Verbose "NEXT VERSION SHOULD BE: $nextVersion"
-          build-mfProject -version $nextVersion -InformationAction Continue
+          write-verbose 'Compiling Changelog'
+          $changeLog = get-mfGitChangeLog -fromLastTag
+          Build-mfProject -version $nextVersion -InformationAction Continue -releaseNotes $changeLog
           write-verbose "Push $nextVersion to workflow as EnvVar"
           write-output "next_version=$nextVersion" >> $env:GITHUB_OUTPUT
+          write-verbose "Push changeLog to workflow as EnvVar"
+          #Need to do this as a special multiline value so it works correctly
+          "change_log<<EOF" >> $env:GITHUB_OUTPUT
+          $changeLog >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
 
       - name: Publish to Local #Push the build from last step to a temporary file-based repository on the build machine. Add Repository to XML for GHPackages Compatibility
         shell: pwsh
@@ -167,13 +229,19 @@ jobs:
         shell: pwsh
         if: success()
         env:
-          GH_TOKEN: ${{ github.token }}
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CHANGE_LOG: ${{ steps.generate_tag.outputs.change_log }}
         run: |
           $VerbosePreference = 'Continue'
           $ver = "v$($env:NEXT_VERSION)"
           $releaseName = "Release $($ver)"
-          $releaseBody = "This is the release for version $ver"
+          #Reuse changelog from buildAndRelease step
+          $markdownText = $($env:CHANGE_LOG)
+          if(!$markdownText){
+            $markdownText = "#Release Version: $ver`n_no changelog provided_`n"
+          }
+          #Get the NuPkg file to send with the release
           $currentPath = get-location
           $repositoryPath = join-path -path $currentPath -childPath 'LocalRepository'
           $nuRef = (get-childItem -path $repositoryPath -recurse -filter *.nupkg).fullname
@@ -183,8 +251,25 @@ jobs:
           }else{
             throw 'No NUPKG found'
           }
-
-          gh release create $ver --title $releaseName --notes $releaseBody
+          write-verbose 'Adding Module and Manifest SHAs to Release Notes for verification'
+          # Load module name from ModuleForge config
+          $moduleName = (Import-Clixml moduleForgeConfig.xml).moduleName
+          # Locate the manifest and module script
+          $psd1Ref = Get-ChildItem -Path build -Filter "$moduleName.psd1" -Recurse | Select-Object -First 1
+          $psm1Ref = Get-ChildItem -Path build -Filter "$moduleName.psm1" -Recurse | Select-Object -First 1
+          # Compute SHA256 hashes
+          $psd1Sha = (Get-FileHash -Path $psd1Ref.FullName -Algorithm SHA256).Hash.ToLower()
+          $psm1Sha = (Get-FileHash -Path $psm1Ref.FullName -Algorithm SHA256).Hash.ToLower()
+          # Append to markdown
+          $markDownText = "$($markDownText)`n### 🔐 SHA256 Checksums`n$("$moduleName").psd1: $psd1Sha `n$("$moduleName").psm1: $psm1Sha"
+          # Flag prerelease tags (SemVer prerelease label, e.g. v1.3.0-prev009) so GitHub does not
+          # badge them as "Latest"; stable releases are marked latest explicitly.
+          if($ver -like '*-*')
+          {
+            gh release create $ver --title $releaseName --notes $markDownText --prerelease
+          }else{
+            gh release create $ver --title $releaseName --notes $markDownText --latest
+          }
           gh release upload $ver $nuRef
 
       - name: Publish to GitHub Packages #Publish module to GH Packages
@@ -193,7 +278,7 @@ jobs:
         env:
           NEXT_VERSION: ${{ steps.generate_tag.outputs.next_version }}
           REPO_URI: ${{ github.repository_owner }}
-          GH_PAT: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $VerbosePreference = 'Continue'
           $ver = "v$($env:NEXT_VERSION)"
@@ -207,4 +292,4 @@ jobs:
           }else{
             throw 'No NUPKG found'
           }
-          dotnet nuget push $nuRef -k $env:GH_PAT -s $repoUri
+          dotnet nuget push $nuRef -k $env:GITHUB_TOKEN -s $repoUri
