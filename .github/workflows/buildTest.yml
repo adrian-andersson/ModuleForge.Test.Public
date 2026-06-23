@@ -32,7 +32,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read   # checkout + gh release list
+      contents: read   # checkout
       packages: read   # read this repo's GitHub Packages NuGet feed
 
     steps:
@@ -191,23 +191,19 @@ jobs:
           $moduleName = (Import-Clixml ./moduleForgeConfig.xml).moduleName
           Write-Verbose "Module under test: $moduleName"
 
-          # Resolve the latest release (including prereleases) from this repo
-          $releases = gh release list --limit 1 --json tagName,isPrerelease | ConvertFrom-Json -ErrorAction Stop
-          $latest   = $releases | Select-Object -First 1
-          if(-not $latest){ throw 'No releases found to test' }
-          $version  = $latest.tagName.TrimStart('v')
-          $semver   = [semver]::New($version)
-          Write-Verbose "Latest release: $($latest.tagName) (prerelease: $($latest.isPrerelease)) -> version $semver"
-
-          # GitHub Packages can lag a few seconds behind the publish step — retry the lookup
+          # Get the latest fresh-built version straight from the GitHub Packages feed
+          # (including prereleases). GitHub Packages can lag a few seconds behind the
+          # publish step, so retry the lookup.
           $selectedRelease = $null
           for($attempt = 1; $attempt -le 6 -and -not $selectedRelease; $attempt++){
-            Write-Verbose "Find attempt $attempt for $moduleName $semver"
-            $selectedRelease = Find-PSResource -Repository myGHPackages -Name $moduleName -Version $semver `
-              -Credential $credential -Prerelease -ErrorAction SilentlyContinue
+            Write-Verbose "Find attempt $attempt for latest $moduleName"
+            $selectedRelease = Find-PSResource -Repository myGHPackages -Name $moduleName `
+              -Credential $credential -Prerelease -ErrorAction SilentlyContinue | Select-Object -First 1
             if(-not $selectedRelease){ Start-Sleep -Seconds 10 }
           }
-          if(-not $selectedRelease){ throw "Module $moduleName $semver not found on GitHub Packages" }
+          if(-not $selectedRelease){ throw "No published $moduleName found on GitHub Packages" }
+          $moduleVersion = if($selectedRelease.Prerelease){ "$($selectedRelease.Version)-$($selectedRelease.Prerelease)" } else { "$($selectedRelease.Version)" }
+          Write-Verbose "Latest published $moduleName: $moduleVersion"
           $selectedRelease | Install-PSResource -Credential $credential
 
           # The "name fix" — correct module folder casing for case-sensitive Linux imports
@@ -216,6 +212,23 @@ jobs:
           $moduleFound = $(Get-Module -ListAvailable).where{ $_.Name -ieq $moduleName }
           if(-not $moduleFound){ throw "Module $moduleName not found after install — case resolution may have failed" }
           Write-Verbose "Installed at: $($moduleFound.ModuleBase)"
+
+          # --- Provenance --------------------------------------------------------
+          # Dump everything installed (prerelease-aware, unlike Get-Module .Version)
+          Write-Host '--- Installed PSResources ---'
+          Get-InstalledPSResource | Sort-Object Name |
+            Format-Table Name,Version,Prerelease,Repository -AutoSize | Out-String | Write-Host
+
+          # ModuleForge stamps the version it built with into the compiled .psm1 header.
+          # NOTE: ModuleForge currently writes [version].ToString(), so this is the BASE
+          # version only — it does NOT include a prerelease label (ModuleForge-side gap).
+          $psm1Path = Join-Path $moduleFound.ModuleBase "$moduleName.psm1"
+          $mfBuiltVersion = 'unknown'
+          if(Test-Path $psm1Path){
+            $headerLine = Get-Content $psm1Path -TotalCount 6 |
+              Select-String -Pattern 'ModuleForge Version:' | Select-Object -First 1
+            if($headerLine){ $mfBuiltVersion = ($headerLine.ToString() -replace '.*ModuleForge Version:\s*','').Trim() }
+          }
 
           # Run the black-box build test suite against the installed module
           $config = New-PesterConfiguration
@@ -227,4 +240,9 @@ jobs:
           if($result.FailedCount -gt 0){
             throw "buildTest: $($result.FailedCount) test(s) failed against the published module"
           }
-          Write-Host "✅ buildTest passed: $($result.PassedCount) test(s) against $moduleName $semver"
+          Write-Host ''
+          Write-Host '================ buildTest summary ================'
+          Write-Host "✅ Passed: $($result.PassedCount) test(s)"
+          Write-Host "   Module under test : $moduleName $moduleVersion"
+          Write-Host "   Built with        : ModuleForge $mfBuiltVersion"
+          Write-Host '=================================================='
