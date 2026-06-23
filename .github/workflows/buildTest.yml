@@ -1,0 +1,140 @@
+# =============================================================================
+# Build Test — validate the COMPILED, PUBLISHED module
+# =============================================================================
+#
+# After "Build and Release" succeeds, this workflow installs the freshly
+# published module from this repository's GitHub Packages feed and runs the
+# black-box Pester suite in buildTest/ against it. This gives confidence that
+# the module ModuleForge produced actually works once installed — every exported
+# command, the alias, the validation class, the enum, and resource-file access.
+#
+# ModuleForge itself (needed for Resolve-MFModuleCase, the "name fix") is also
+# pulled from GitHub Packages rather than PSGallery.
+#
+# ONE-TIME SETUP (no PAT required):
+#   ModuleForge is published from a different repository under the same owner, so
+#   this repo's GITHUB_TOKEN cannot see it by default. Grant access once:
+#     GitHub > ModuleForge package > Package settings > Manage Actions access
+#       > add this repository (ModuleForge.Test.Public) with Read.
+#   If you would rather not do that, create a classic PAT with read:packages,
+#   store it as a secret, and swap $env:GH_TOKEN below for that secret.
+# =============================================================================
+
+name: Build Test
+
+on:
+  workflow_run:
+    workflows: ["Build and Release"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  buildTest:
+    # Auto-run only when the upstream build succeeded; always run on manual dispatch.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read   # checkout + gh release list
+      packages: read   # read the GitHub Packages NuGet feed
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install build/test dependencies
+        shell: pwsh
+        run: |
+          $VerbosePreference = 'Continue'
+          # Infrastructure modules always come from PSGallery
+          Install-Module -Name Pester -Force -SkipPublisherCheck
+          Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck
+          Import-Module Microsoft.PowerShell.PSResourceGet
+          Get-Module Pester,Microsoft.PowerShell.PSResourceGet |
+            Select-Object Name,Version | Format-Table
+
+      - name: Register GitHub Packages repository
+        shell: pwsh
+        if: success()
+        run: |
+          $VerbosePreference = 'Continue'
+          $repoUrl = "https://nuget.pkg.github.com/$($env:GITHUB_REPOSITORY_OWNER)/index.json"
+          Write-Verbose "GitHub Packages feed: $repoUrl"
+          Register-PSResourceRepository -Name 'myGHPackages' -Uri $repoUrl -Trusted
+          Get-PSResourceRepository | Select-Object Name,Uri,Trusted | Format-List
+
+      - name: Install ModuleForge from GitHub Packages
+        shell: pwsh
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $VerbosePreference = 'Continue'
+          $credential = New-Object System.Management.Automation.PSCredential(
+            'githubActions',
+            (ConvertTo-SecureString $env:GH_TOKEN -AsPlainText -Force)
+          )
+          # Latest ModuleForge, including prereleases, to test the newest build
+          Install-PSResource -Repository myGHPackages -Name 'ModuleForge' `
+            -Credential $credential -Prerelease -TrustRepository
+          Import-Module ModuleForge
+          Get-Module ModuleForge |
+            Select-Object Name,@{n='version';e={if($_.PrivateData.PSData.Prerelease){"$($_.Version)-$($_.PrivateData.PSData.Prerelease)"}else{"$($_.Version)"}}} |
+            Format-Table
+
+      - name: Install published module and run build tests
+        shell: pwsh
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $VerbosePreference = 'Continue'
+          $credential = New-Object System.Management.Automation.PSCredential(
+            'githubActions',
+            (ConvertTo-SecureString $env:GH_TOKEN -AsPlainText -Force)
+          )
+
+          if(-not (Test-Path ./moduleForgeConfig.xml)){
+            throw 'Unable to read moduleForgeConfig.xml'
+          }
+          $moduleName = (Import-Clixml ./moduleForgeConfig.xml).moduleName
+          Write-Verbose "Module under test: $moduleName"
+
+          # Resolve the latest release (including prereleases) from this repo
+          $releases = gh release list --limit 1 --json tagName,isPrerelease | ConvertFrom-Json -ErrorAction Stop
+          $latest   = $releases | Select-Object -First 1
+          if(-not $latest){ throw 'No releases found to test' }
+          $version  = $latest.tagName.TrimStart('v')
+          $semver   = [semver]$version
+          Write-Verbose "Latest release: $($latest.tagName) (prerelease: $($latest.isPrerelease)) -> version $semver"
+
+          # GitHub Packages can lag a few seconds behind the publish step — retry the lookup
+          $found = $null
+          for($attempt = 1; $attempt -le 6 -and -not $found; $attempt++){
+            Write-Verbose "Find attempt $attempt for $moduleName $semver"
+            $found = Find-PSResource -Repository myGHPackages -Name $moduleName -Version $semver `
+              -Credential $credential -Prerelease -ErrorAction SilentlyContinue
+            if(-not $found){ Start-Sleep -Seconds 10 }
+          }
+          if(-not $found){ throw "Module $moduleName $semver not found on GitHub Packages" }
+
+          $found | Install-PSResource -Credential $credential -Prerelease -TrustRepository
+
+          # The "name fix" — correct module folder casing for case-sensitive Linux imports
+          Write-Verbose 'Resolving module case'
+          Resolve-MFModuleCase -ModuleName $moduleName
+          $installed = (Get-Module -ListAvailable).where{ $_.Name -ieq $moduleName }
+          if(-not $installed){ throw "Module $moduleName not found after install/case-resolve" }
+          Write-Verbose "Installed at: $($installed.ModuleBase)"
+
+          # Run the black-box build test suite against the installed module
+          $config = New-PesterConfiguration
+          $config.Run.Path        = './buildTest'
+          $config.Run.PassThru    = $true
+          $config.Output.Verbosity = 'Detailed'
+          $result = Invoke-Pester -Configuration $config
+
+          if($result.FailedCount -gt 0){
+            throw "buildTest: $($result.FailedCount) test(s) failed against the published module"
+          }
+          Write-Host "✅ buildTest passed: $($result.PassedCount) test(s) against $moduleName $semver"

@@ -15,15 +15,20 @@ It includes the following module functions:
   - SpaceSuitType
 - One Private Function
   - Get-AlienVisitorWelcome
-- Four Functions/Exported Commands
+- Five Functions/Exported Commands
   - Get-GalacticAmbassador
   - Get-GalacticReception
+  - Get-WelcomeMessage (reads a bundled resource file via `$PSScriptRoot`)
   - New-AlienVisitor
   - Start-Blastoff
-- Three Pester Tests
+- One Resource File
+  - text.txt (consumed by Get-WelcomeMessage)
+- Five Pester Tests
+  - Get-GalacticAmbassador.Tests
   - Get-GalacticReception.Tests
+  - Get-WelcomeMessage.Tests (demonstrates the `$mockPsScriptRoot` resource-testing pattern)
   - New-AlienVisitor.Tests
-  - Start-Plastoff.Tests
+  - Start-Blastoff.Tests
 - Two GH Actions Workflows
   - A workflow to invoke-pester on a push to 'main' branch automatically
   - A Build and Release workflow that can be run manually, with dropdown options for what version actions to take
