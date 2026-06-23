@@ -77,7 +77,24 @@ jobs:
           # Latest ModuleForge, including prereleases, to test the newest build
           Install-PSResource -Repository myGHPackages -Name 'ModuleForge' `
             -Credential $credential -Prerelease -TrustRepository
-          Import-Module ModuleForge
+
+          # GitHub Packages lowercases the package id, so the install folder is
+          # 'moduleforge' while the manifest is 'ModuleForge.psd1'. On case-sensitive
+          # Linux, Import-Module by name can't resolve that mismatch (this is exactly
+          # what Resolve-MFModuleCase fixes — but we can't call it before ModuleForge
+          # is loaded). Bootstrap by importing the manifest directly by path.
+          $moduleRoots = $env:PSModulePath -split [IO.Path]::PathSeparator
+          $mfDir = Get-ChildItem -Path $moduleRoots -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'ModuleForge' } | Select-Object -First 1
+          if(-not $mfDir){ throw 'ModuleForge install folder not found' }
+          # Pick the manifest in the newest version folder (ModuleForge/<version>/ModuleForge.psd1)
+          $mfManifest = Get-ChildItem -Path $mfDir.FullName -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'ModuleForge.psd1' } |
+            Sort-Object { $v=$null; [void][version]::TryParse((($_.Directory.Name) -replace '-.*$',''),[ref]$v); if($v){$v}else{[version]'0.0.0'} } -Descending |
+            Select-Object -First 1
+          if(-not $mfManifest){ throw 'ModuleForge manifest not found after install' }
+          Write-Verbose "Importing ModuleForge from: $($mfManifest.FullName)"
+          Import-Module $mfManifest.FullName -Force
           Get-Module ModuleForge |
             Select-Object Name,@{n='version';e={if($_.PrivateData.PSData.Prerelease){"$($_.Version)-$($_.PrivateData.PSData.Prerelease)"}else{"$($_.Version)"}}} |
             Format-Table
@@ -99,6 +116,21 @@ jobs:
           }
           $moduleName = (Import-Clixml ./moduleForgeConfig.xml).moduleName
           Write-Verbose "Module under test: $moduleName"
+
+          # ModuleForge came from GitHub Packages with a lowercased folder ('moduleforge'),
+          # which by-name import can't resolve on case-sensitive Linux. Import by manifest
+          # path (this provides Resolve-MFModuleCase, used below to fix the module under test).
+          $moduleRoots = $env:PSModulePath -split [IO.Path]::PathSeparator
+          $mfDir = Get-ChildItem -Path $moduleRoots -Directory -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'ModuleForge' } | Select-Object -First 1
+          if(-not $mfDir){ throw 'ModuleForge install folder not found' }
+          # Pick the manifest in the newest version folder (ModuleForge/<version>/ModuleForge.psd1)
+          $mfManifest = Get-ChildItem -Path $mfDir.FullName -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ieq 'ModuleForge.psd1' } |
+            Sort-Object { $v=$null; [void][version]::TryParse((($_.Directory.Name) -replace '-.*$',''),[ref]$v); if($v){$v}else{[version]'0.0.0'} } -Descending |
+            Select-Object -First 1
+          if(-not $mfManifest){ throw 'ModuleForge manifest not found' }
+          Import-Module $mfManifest.FullName -Force
 
           # Resolve the latest release (including prereleases) from this repo
           $releases = gh release list --limit 1 --json tagName,isPrerelease | ConvertFrom-Json -ErrorAction Stop
