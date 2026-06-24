@@ -203,13 +203,14 @@ jobs:
           }
           if(-not $selectedRelease){ throw "No published $moduleName found on GitHub Packages" }
           $moduleVersion = if($selectedRelease.Prerelease){ "$($selectedRelease.Version)-$($selectedRelease.Prerelease)" } else { "$($selectedRelease.Version)" }
-          Write-Verbose "Latest published $moduleName: $moduleVersion"
+          Write-Verbose "Latest published ${moduleName}: $moduleVersion"
           $selectedRelease | Install-PSResource -Credential $credential
 
           # The "name fix" — correct module folder casing for case-sensitive Linux imports
           Write-Verbose 'Resolving module case'
           Resolve-MFModuleCase -ModuleName $moduleName
-          $moduleFound = $(Get-Module -ListAvailable).where{ $_.Name -ieq $moduleName }
+          $moduleFound = $(Get-Module -ListAvailable).where{ $_.Name -ieq $moduleName } |
+            Sort-Object Version -Descending | Select-Object -First 1
           if(-not $moduleFound){ throw "Module $moduleName not found after install — case resolution may have failed" }
           Write-Verbose "Installed at: $($moduleFound.ModuleBase)"
 
