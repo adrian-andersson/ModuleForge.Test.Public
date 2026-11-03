@@ -37,7 +37,9 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install dependencies
         shell: pwsh
@@ -220,9 +222,8 @@ jobs:
           Get-InstalledPSResource | Sort-Object Name |
             Format-Table Name,Version,Prerelease,Repository -AutoSize | Out-String | Write-Host
 
-          # ModuleForge stamps the version it built with into the compiled .psm1 header.
-          # NOTE: ModuleForge currently writes [version].ToString(), so this is the BASE
-          # version only — it does NOT include a prerelease label (ModuleForge-side gap).
+          # ModuleForge stamps the version it built with into the compiled .psm1 header,
+          # including any prerelease label (e.g. 1.4.0-prev003)
           $psm1Path = Join-Path $moduleFound.ModuleBase "$moduleName.psm1"
           $mfBuiltVersion = 'unknown'
           if(Test-Path $psm1Path){
