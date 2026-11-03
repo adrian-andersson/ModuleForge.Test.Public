@@ -1,18 +1,18 @@
 <Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
   <Obj RefId="0">
     <TN RefId="0">
-      <T>System.Management.Automation.PSCustomObject</T>
-      <T>System.Object</T>
+      <T>Deserialized.System.Management.Automation.PSCustomObject</T>
+      <T>Deserialized.System.Object</T>
     </TN>
     <MS>
       <S N="moduleName">AstroCmdlets</S>
       <S N="description">A test module</S>
-      <Version N="minimumPsVersion">7.2.0</Version>
+      <Version N="minimumPsVersion">7.6</Version>
       <Obj N="moduleAuthors" RefId="1">
         <TN RefId="1">
-          <T>System.String[]</T>
-          <T>System.Array</T>
-          <T>System.Object</T>
+          <T>Deserialized.System.String[]</T>
+          <T>Deserialized.System.Array</T>
+          <T>Deserialized.System.Object</T>
         </TN>
         <LST>
           <S>Adrian.Andersson</S>
@@ -35,6 +35,7 @@
       <Nil N="ExternalModuleDependencies" />
       <Nil N="DefaultCommandPrefix" />
       <Nil N="PrivateData" />
+      <S N="testDependencies">PesterAndScriptAnalyzer</S>
     </MS>
   </Obj>
 </Objs>
