@@ -12,7 +12,7 @@
 # Microsoft.PowerShell.PSResourceGet is not listed, as it installs everything else. PowerShell 7.4 and newer include it.
 @{
     'ModuleForge' = @{
-        version = '[1.4.0-prev003, 2.0.0)'
+        version = '[1.4.0-prev004, 2.0.0)'
         prerelease = 'true'
         repository = 'PSGallery'
     }
