@@ -30,6 +30,11 @@ on:
           - required-resource-file
           - psgallery-latest
           - psgallery-prerelease
+      moduleforge_version:
+        description: 'Optional exact ModuleForge version from PSGallery, e.g. 1.4.0-prev005. Overrides dependency_source for ModuleForge. Set by ModuleForge''s PSGallery Release'
+        required: false
+        default: ''
+        type: string
       include_source_metadata:
         description: 'Add the branch and commit this was built from to the package metadata'
         required: false
@@ -119,18 +124,43 @@ jobs:
         shell: pwsh
         env:
           DEPENDENCY_SOURCE: ${{ github.event.inputs.dependency_source }}
+          MODULEFORGE_REQUESTED: ${{ github.event.inputs.moduleforge_version }}
         run: |
           $VerbosePreference = 'Continue'
-          $source = switch($env:DEPENDENCY_SOURCE)
+          if($env:MODULEFORGE_REQUESTED)
           {
-            'psgallery-latest' { 'PSGallery' }
-            'psgallery-prerelease' { write-verbose '********WARNING: Will use the latest ModuleForge, even if it is a prerelease ********'; 'PSGalleryPrerelease' }
-            default { 'RequiredResourceFile' }
+            #An exact version, usually one ModuleForge's PSGallery Release has just published.
+            #PSGallery can take a few minutes to list a new version, so retry for up to 10 minutes
+            $requested = $env:MODULEFORGE_REQUESTED.TrimStart('v')
+            write-verbose "Requested ModuleForge $requested from PSGallery"
+            $resourceGet = Get-Module -ListAvailable -Name Microsoft.PowerShell.PSResourceGet | Sort-Object -Property Version -Descending | Select-Object -First 1
+            if(!$resourceGet -or $resourceGet.Version -lt [version]'1.0.0')
+            {
+              Install-Module -Name Microsoft.PowerShell.PSResourceGet -Repository PSGallery -Force -SkipPublisherCheck -Scope CurrentUser
+            }
+            import-module Microsoft.PowerShell.PSResourceGet
+            $found = $null
+            for($attempt = 1; $attempt -le 20 -and -not $found; $attempt++){
+              write-verbose "Find attempt $attempt for ModuleForge $requested"
+              $found = Find-PSResource -Name ModuleForge -Version $requested -Prerelease -Repository PSGallery -ErrorAction SilentlyContinue
+              if(-not $found){ Start-Sleep -Seconds 30 }
+            }
+            if(-not $found){ throw "❌ ModuleForge $requested not found on PSGallery after 10 minutes" }
+            $found | Install-PSResource -TrustRepository -AcceptLicense -Quiet -ErrorAction Stop
+            $found | Select-Object Name,Version,Prerelease,Repository | Format-Table
+            $moduleForgeVersion = "$($found.Version)"
+          }else{
+            $source = switch($env:DEPENDENCY_SOURCE)
+            {
+              'psgallery-latest' { 'PSGallery' }
+              'psgallery-prerelease' { write-verbose '********WARNING: Will use the latest ModuleForge, even if it is a prerelease ********'; 'PSGalleryPrerelease' }
+              default { 'RequiredResourceFile' }
+            }
+            $installed = ./scripts/Install-MFBuildDependencies.ps1 -Source $source -Name ModuleForge
+            $installed|Format-Table
+            $moduleForgeVersion = $installed.Version -replace '-.*$',''
           }
-          $installed = ./scripts/Install-MFBuildDependencies.ps1 -Source $source -Name ModuleForge
-          $installed|Format-Table
           #Each step is a new session, so later steps import this exact version, in case a persistent runner has others
-          $moduleForgeVersion = $installed.Version -replace '-.*$',''
           "MODULEFORGE_VERSION=$moduleForgeVersion" >> $env:GITHUB_ENV
           import-module Microsoft.PowerShell.PSResourceGet
           import-module ModuleForge -RequiredVersion $moduleForgeVersion
