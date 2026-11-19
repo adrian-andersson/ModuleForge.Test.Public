@@ -1,67 +1,61 @@
-# Pull Request
+## Notes for reviewers
 
-## Description
+<!-- Anything the commits don't say: why, context, how you tested it, or where to look closely.
+     "Fixes #123" closes the issue when this merges -->
 
-<!-- Concise summary of changes + any relevant context or motivation -->
+## Type of change
 
-## Related Issues
+<!-- Tick the highest-impact one.
 
-<!-- Link related issues | Use "Fixes #123" or "AB#456" to auto-close -->
+- Breaking (rare): something changed that could break scripts or modules that depend on this one. For example:
+  - A mandatory parameter added
+  - A parameter renamed or removed without an alias, including one that takes pipeline input
+  - Validation that now rejects input that used to work
+  - A changed default value, or other changed behaviour callers rely on
+  - Function output changed in a way that's likely to break piping
+- Feature (common): you added or streamlined something. For example:
+  - New functions
+  - New optional parameters, or a parameter renamed with an alias kept
+  - Validation that now accepts more
+  - Additions to function output
+- Fix (common): you fixed something that was broken, without breaking anything that depends on it. For example:
+  - A bug fix
+  - Additions or changes to the Error, Warning, Information or Verbose streams
+  - Performance improvements, or refactoring that doesn't change behaviour
+- Non-module change (common): tweaks that don't touch the module's code. For example:
+  - Help, README or other documentation
+  - CI/CD workflows
+  - Tests
 
-## Quick Review Checklist
-
-- [ ] Pester Tests included targeting satisfactory code coverage (>75%)
-- [ ] Followed Best-Practices and implemented Script Analyzer Suggestions
-- [ ] Reviewed "Type of Change" section below, and considered if any additional version bumps are required
-- [ ] Used appropriate Git commit prefixes (For automated changelog generation)
-
-## Release Intent
-
-<!-- Indicate the release strategy for this PR -->
-
-- [ ] This Pull Request is part of a **PreRelease series**
-- [ ] This Pull Request finalises a **Stable Release**
-- [ ] No release planned for this Pull Request
-
-## Type of Changes included in this PR
-
-<!--  Select all that apply. Use the highest-impact change as guidance in determining version increment type -->
-
-### 🔴 Major (Breaking)
-
-- [ ] Breaking Change to function Output
-- [ ] Mandatory Parameter added or changed
-- [ ] Parameter renamed without alias Support
-- [ ] Major rewrite or refactor
-- [ ] Other breaking change
-
-### 🟡 Minor (Features)
-
-- [ ] New Function(s) added
-- [ ] Non-breaking change to function output
-- [ ] Parameter renamed with backwards-compatible alias
-- [ ] New optional parameter
-- [ ] Input validation changes
-- [ ] Other minor enhancements
-
-### 🟢 Patch (Fixes & Maintenance)
-
-- [ ] Bug Fix(es)
-- [ ] Stream Output Changes (Verbose, Error, etc)
-- [ ] Performance or style improvements
-- [ ] Test updates or additions
-- [ ] Other patch-level change
-
-### ⚪ Non-Release Change
-
-- [ ] Documentation update or change
-- [ ] CI/CD or workflow change
-- [ ] Internal tooling or developer experience
-- [ ] Other non-release change
-
-<!-- To Repository Owners:
-
-This PR template reflects a workflow used by ModuleForge's author. It’s designed to support semantic versioning, pre-release planning, and cross-platform issue linking. 
-Feel free to adapt it to your own project needs, use it as is, or create your own entirely
-
+Your commit prefixes should agree:
+  - feat: for a feature
+  - fix:, refactor: or perf: for a fix
+  - docs:, chore: or test: for a non-module change
+  Run Get-MFGitPrefixHelp for more guidance
 -->
+
+- [ ] 🔴 Breaking
+- [ ] 🟡 Feature
+- [ ] 🟢 Fix
+- [ ] ⚪ Non-module change
+
+## Release
+
+<!-- Which Build and Release choice should follow this merge? Most pull requests are Next Prerelease.
+     Start a new series on the first feature (minor) or breaking change (major) since the last stable release.
+     Later ones in the same series are Next Prerelease -->
+
+- [ ] **Next Prerelease**
+- [ ] **New Prerelease Series: minor**
+- [ ] **New Prerelease Series: major**
+- [ ] **No build yet** - more pull requests to come first
+
+<!-- And, separately -->
+- [ ] Last pull request in this series: **Promote to Stable** once its prerelease is tested
+
+## Checklist
+
+- [ ] Commits use changelog prefixes (`feat:`, `fix:` ...). `Get-MFGitPrefixHelp` lists them
+- [ ] New or changed behaviour has Pester tests
+
+<!-- ModuleForge's pull request template. Adapt it to your project, or replace it -->
