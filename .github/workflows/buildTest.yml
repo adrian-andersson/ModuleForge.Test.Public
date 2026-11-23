@@ -1,20 +1,25 @@
 # =============================================================================
-# Build Test — validate the COMPILED, PUBLISHED module
+# Build Test: check the PUBLISHED module, after Build and Release
 # =============================================================================
 #
-# After "Build and Release" succeeds, this workflow installs the freshly
-# published module from this repository's own GitHub Packages feed and runs the
-# black-box Pester suite in buildTest/ against it. This gives confidence that the
-# module ModuleForge produced actually works once installed — every exported
-# command, the alias, the validation class, the enum, and resource-file access.
+# Unit tests load your functions from source/, so they can't see what the build
+# changes: the manifest's export lists, the compiled .psm1, and how the package
+# installs. After "Build and Release" succeeds, this installs the version it just
+# published from this repository's GitHub Packages feed, and runs every
+# *.Tests.ps1 in the buildTest folder against it.
 #
-# NO ModuleForge dependency: GitHub Packages lowercases the package id, so the
-# install folder ('astrocmdlets') won't match the manifest casing and breaks
-# Import-Module by name on case-sensitive Linux. That is fixed by an inline copy
-# of Resolve-MFModuleCase (see psgalleryRelease_NoModuleForge.yml in the
-# ModuleForge repo). Because the module under test is in THIS repository's
-# package feed, the default GITHUB_TOKEN can read it — no PAT, no package-access
-# grant required.
+# buildTest/Module.Build.Tests.ps1 checks every public function and alias in
+# source/functions is exported, and nothing else. Add your own black-box tests
+# beside it.
+#
+# No secrets are needed: the module is in this repository's own package feed,
+# so the default GITHUB_TOKEN can read it. GitHub Packages lowercases the package
+# id, which breaks Import-Module by name on case-sensitive Linux, so the install
+# folder is renamed to match the manifest (Resolve-MFModuleCase, inlined below so
+# this workflow does not need ModuleForge).
+#
+# If your Build and Release workflow has a different name, change the
+# workflows: entry below to match it.
 # =============================================================================
 
 name: Build Test
@@ -28,8 +33,9 @@ on:
 
 jobs:
   buildTest:
-    # Auto-run only when the upstream build succeeded; always run on manual dispatch.
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    # Auto-run only when the upstream build succeeded and published something; always run on manual dispatch.
+    # A dry run of Build and Release succeeds without publishing, and says DRY RUN in its run name
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && !contains(github.event.workflow_run.display_title, 'DRY RUN')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read   # checkout
@@ -41,15 +47,14 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install dependencies
+      - name: Install dependencies #Pester from BuildDependencies.psd1, as the other workflows use
         shell: pwsh
         run: |
           $VerbosePreference = 'Continue'
-          Install-Module -Name Pester -Force -SkipPublisherCheck
-          Install-Module -Name Microsoft.PowerShell.PSResourceGet -Force -SkipPublisherCheck
-          Import-Module Microsoft.PowerShell.PSResourceGet
-          Get-Module Pester,Microsoft.PowerShell.PSResourceGet |
-            Select-Object Name,Version | Format-Table
+          $installed = ./scripts/Install-MFBuildDependencies.ps1 -Name Pester
+          $installed | Format-Table
+          #Each step is a new session, so the test step imports this exact version
+          "PESTER_VERSION=$($installed.ModuleVersion)" >> $env:GITHUB_ENV
 
       - name: Register GitHub Packages repository
         shell: pwsh
@@ -233,13 +238,15 @@ jobs:
           }
 
           # Run the black-box build test suite against the installed module
+          Import-Module Pester -RequiredVersion $env:PESTER_VERSION
           $config = New-PesterConfiguration
           $config.Run.Path        = './buildTest'
           $config.Run.PassThru    = $true
           $config.Output.Verbosity = 'Detailed'
           $result = Invoke-Pester -Configuration $config
 
-          if($result.FailedCount -gt 0){
+          #Result also catches a test file that failed to load, which FailedCount does not count
+          if($result.FailedCount -gt 0 -or $result.Result -ne 'Passed'){
             throw "buildTest: $($result.FailedCount) test(s) failed against the published module"
           }
           Write-Host ''
