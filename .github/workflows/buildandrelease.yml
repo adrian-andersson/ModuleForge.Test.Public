@@ -1,5 +1,6 @@
 name: Build and Release
-run-name: "Build and Release: ${{ inputs.release }}${{ inputs.dry_run && ' - DRY RUN' || '' }}"
+#[ModuleForge x.y.z, trigger] marks a run that was asked to test that ModuleForge version, which Build Test reads to report it too
+run-name: "Build and Release: ${{ inputs.release }}${{ inputs.moduleforge_version && format(' [ModuleForge {0}, {1}]', inputs.moduleforge_version, inputs.downstream_trigger || 'manual') || '' }}${{ inputs.dry_run && ' - DRY RUN' || '' }}"
 
 # ModuleForge.Test.Public: the ModuleForge GitHub scaffold, with one change. Build and Release can install an exact
 # ModuleForge version from PSGallery, through the Advanced moduleforge_version input.
@@ -7,6 +8,11 @@ run-name: "Build and Release: ${{ inputs.release }}${{ inputs.dry_run && ' - DRY
 # ModuleForge's PSGallery Release starts this workflow after each publish, passing only moduleforge_version, so the
 # run is a Next Prerelease built with the version just published. Add-MFGithubScaffold -Force replaces this file:
 # put the moduleforge_version input and the Install dependencies step back afterwards.
+#
+# Downstream reporting: a run asked to test a specific ModuleForge version, and not a dry run, reports its result to
+# that ModuleForge release's Downstream testing table, with the DOWNSTREAM_STATUS_TOKEN secret (Commit statuses: write
+# on ModuleForge only). ModuleForge's PSGallery Release sets downstream_trigger to automatic. Other runs never report.
+# This repository is public, so results link to their run.
 
 on:
   workflow_dispatch:
@@ -41,6 +47,12 @@ on:
         required: false
         default: ''
         type: string
+      downstream_trigger:
+        description: 'Advanced: how this run was started, for ModuleForge''s Downstream testing table. ModuleForge''s PSGallery Release sets automatic'
+        required: false
+        default: 'manual'
+        type: choice
+        options: [manual, automatic]
       include_source_metadata:
         description: 'Advanced: add the branch and commit this was built from to the package metadata'
         required: false
@@ -60,6 +72,10 @@ jobs:
       contents: write #required for pushing tags and creating releases
       packages: write #Needed for publishing to Github packages
       actions: read #Grant read access to actions and logs
+    env:
+      #Set only when this run was asked to test a specific ModuleForge version, which is what reports to ModuleForge
+      REPORT_VERSION: ${{ !inputs.dry_run && inputs.moduleforge_version || '' }}
+      REPORT_TRIGGER: ${{ inputs.downstream_trigger || 'manual' }}
 
     steps:
 
@@ -68,6 +84,16 @@ jobs:
         with:
           fetch-depth: 0 #Ensure we are getting all the tag history
           persist-credentials: false #The build runs repository code, so keep the token off disk. Only the tag step gets it
+
+      - name: Report the build has started to ModuleForge
+        if: env.REPORT_VERSION != ''
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DOWNSTREAM_STATUS_TOKEN: ${{ secrets.DOWNSTREAM_STATUS_TOKEN }}
+        run: |
+          #This repository is public, so the result links to its run
+          ./.github/scripts/Send-DownstreamStatus.ps1 -Repository "$($env:GITHUB_REPOSITORY_OWNER)/ModuleForge" -Version $env:REPORT_VERSION -Check 'Test.Public / Build' -State pending -Trigger $env:REPORT_TRIGGER -Description 'Building from PSGallery' -TargetUrl "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/actions/runs/$($env:GITHUB_RUN_ID)"
 
       - name: Git Check
         shell: pwsh
@@ -424,3 +450,16 @@ jobs:
           }
           #A rerun keeps the package an earlier attempt published
           dotnet nuget push $nuRef -k $env:GITHUB_TOKEN -s $repoUri --skip-duplicate
+
+      - name: Report the build result to ModuleForge
+        #Always, so a failed build is reported too
+        if: always() && env.REPORT_VERSION != ''
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DOWNSTREAM_STATUS_TOKEN: ${{ secrets.DOWNSTREAM_STATUS_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          $state = switch($env:JOB_STATUS){ 'success' { 'success' } 'failure' { 'failure' } default { 'error' } }
+          $note = if($state -eq 'success'){ 'Built from PSGallery and published' }else{ 'Build did not finish' }
+          ./.github/scripts/Send-DownstreamStatus.ps1 -Repository "$($env:GITHUB_REPOSITORY_OWNER)/ModuleForge" -Version $env:REPORT_VERSION -Check 'Test.Public / Build' -State $state -Trigger $env:REPORT_TRIGGER -Description $note -TargetUrl "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/actions/runs/$($env:GITHUB_RUN_ID)"
