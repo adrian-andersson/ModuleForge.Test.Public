@@ -20,6 +20,11 @@
 #
 # If your Build and Release workflow has a different name, change the
 # workflows: entry below to match it.
+#
+# ModuleForge.Test.Public: when the Build and Release run that started this was
+# asked to test a specific ModuleForge version, its name ends with
+# [ModuleForge x.y.z, trigger], and this reports its result to that ModuleForge
+# release's Downstream testing table too. Other runs never do.
 # =============================================================================
 
 name: Build Test
@@ -47,6 +52,33 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Work out what to report to ModuleForge
+        id: report
+        shell: pwsh
+        env:
+          PARENT_TITLE: ${{ github.event.workflow_run.display_title }}
+        run: |
+          #Only a Build and Release run asked to test a specific ModuleForge version is named with it
+          if($env:PARENT_TITLE -match '\[ModuleForge (?<version>[0-9A-Za-z.+-]+), (?<trigger>automatic|manual)\]')
+          {
+            "version=$($Matches.version)" >> $env:GITHUB_OUTPUT
+            "trigger=$($Matches.trigger)" >> $env:GITHUB_OUTPUT
+          }else{
+            Write-Verbose 'Not a run testing a specific ModuleForge version, so nothing is reported' -Verbose
+          }
+
+      - name: Report the build test has started to ModuleForge
+        if: steps.report.outputs.version != ''
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DOWNSTREAM_STATUS_TOKEN: ${{ secrets.DOWNSTREAM_STATUS_TOKEN }}
+          REPORT_VERSION: ${{ steps.report.outputs.version }}
+          REPORT_TRIGGER: ${{ steps.report.outputs.trigger }}
+        run: |
+          #This repository is public, so the result links to its run
+          ./.github/scripts/Send-DownstreamStatus.ps1 -Repository "$($env:GITHUB_REPOSITORY_OWNER)/ModuleForge" -Version $env:REPORT_VERSION -Check 'Test.Public / Build Test' -State pending -Trigger $env:REPORT_TRIGGER -Description 'Testing the published module' -TargetUrl "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/actions/runs/$($env:GITHUB_RUN_ID)"
+
       - name: Install dependencies #Pester from BuildDependencies.psd1, as the other workflows use
         shell: pwsh
         run: |
@@ -67,6 +99,7 @@ jobs:
           Get-PSResourceRepository | Select-Object Name,Uri,Trusted | Format-List
 
       - name: Install published module and run build tests
+        id: tests
         shell: pwsh
         if: success()
         env:
@@ -244,6 +277,10 @@ jobs:
           $config.Run.PassThru    = $true
           $config.Output.Verbosity = 'Detailed'
           $result = Invoke-Pester -Configuration $config
+          #Counts only, for ModuleForge's Downstream testing table, which is public
+          "passed=$($result.PassedCount)" >> $env:GITHUB_OUTPUT
+          "failed=$($result.FailedCount)" >> $env:GITHUB_OUTPUT
+          "total=$($result.TotalCount)" >> $env:GITHUB_OUTPUT
 
           #Result also catches a test file that failed to load, which FailedCount does not count
           if($result.FailedCount -gt 0 -or $result.Result -ne 'Passed'){
@@ -255,3 +292,24 @@ jobs:
           Write-Host "   Module under test : $moduleName $moduleVersion"
           Write-Host "   Built with        : ModuleForge $mfBuiltVersion"
           Write-Host '=================================================='
+
+      - name: Report the build test result to ModuleForge
+        #Always, so a failed test run is reported too
+        if: always() && steps.report.outputs.version != ''
+        continue-on-error: true
+        shell: pwsh
+        env:
+          DOWNSTREAM_STATUS_TOKEN: ${{ secrets.DOWNSTREAM_STATUS_TOKEN }}
+          REPORT_VERSION: ${{ steps.report.outputs.version }}
+          REPORT_TRIGGER: ${{ steps.report.outputs.trigger }}
+          JOB_STATUS: ${{ job.status }}
+          PASSED: ${{ steps.tests.outputs.passed }}
+          FAILED: ${{ steps.tests.outputs.failed }}
+          TOTAL: ${{ steps.tests.outputs.total }}
+        run: |
+          $state = switch($env:JOB_STATUS){ 'success' { 'success' } 'failure' { 'failure' } default { 'error' } }
+          $note = if($state -eq 'success' -and $env:PASSED){ "$($env:PASSED) tests passed" }
+                  elseif($env:FAILED -and [int]$env:FAILED -gt 0){ "$($env:FAILED) of $($env:TOTAL) tests failed" }
+                  elseif($state -eq 'success'){ 'Build tests passed' }
+                  else{ 'Build Test did not finish' }
+          ./.github/scripts/Send-DownstreamStatus.ps1 -Repository "$($env:GITHUB_REPOSITORY_OWNER)/ModuleForge" -Version $env:REPORT_VERSION -Check 'Test.Public / Build Test' -State $state -Trigger $env:REPORT_TRIGGER -Description $note -TargetUrl "$($env:GITHUB_SERVER_URL)/$($env:GITHUB_REPOSITORY)/actions/runs/$($env:GITHUB_RUN_ID)"
