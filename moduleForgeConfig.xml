@@ -36,6 +36,7 @@
       <Nil N="DefaultCommandPrefix" />
       <Nil N="PrivateData" />
       <S N="testDependencies">PesterAndScriptAnalyzer</S>
+      <S N="sourceProvenance">Auto</S>
     </MS>
   </Obj>
 </Objs>
